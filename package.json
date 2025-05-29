@@ -1,0 +1,21 @@
+{
+  "name": "gpio-emulator-server",
+  "version": "1.0.0",
+  "description": "Web-based GPIO emulator with QEMU support",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": ["gpio", "emulator", "qemu", "raspberrypi", "nodejs"],
+  "author": "Michelle Uy",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "ws": "^8.18.2"
+  }
+}
+

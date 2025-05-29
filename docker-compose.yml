@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  gpio-emulator:
+    build: .
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - ./known_hosts:/root/.ssh/known_hosts:ro
+      - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro

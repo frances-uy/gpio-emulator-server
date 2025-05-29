@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GPIO Emulator</title>
+  <meta charset="UTF-8" />
+  <style>
+    body {
+      font-family: "Courier New", monospace;
+      margin: 2rem;
+      background: #f5f8fa;
+      color: #222;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      color: #0077cc;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    textarea, button {
+      font-family: "Courier New", monospace;
+      font-size: 1rem;
+      padding: 0.6rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    textarea {
+      width: 90%;
+      max-width: 500px;
+      height: 80px;
+      resize: vertical;
+    }
+
+    button {
+      background-color: #0077cc;
+      color: white;
+      cursor: pointer;
+      min-width: 120px;
+    }
+
+    button:hover {
+      background-color: #005fa3;
+    }
+
+    #history {
+      background: white;
+      border-radius: 6px;
+      padding: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      max-width: 600px;
+      margin: 0 auto 1rem auto;
+      height: 150px;
+      overflow-y: auto;
+      font-family: "Courier New", monospace;
+    }
+
+    table {
+      margin: auto;
+      width: 90%;
+      max-width: 600px;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 1rem;
+      text-align: center;
+      border: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #0077cc;
+      color: white;
+    }
+
+    .on {
+      background-color: #d2ffd2;
+    }
+
+    .off {
+      background-color: #ffd6d6;
+    }
+
+    /* Modal styles */
+    #helpModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      font-family: "Courier New", monospace;
+    }
+
+    #helpModalContent {
+      background: white;
+      max-width: 600px;
+      margin: 10% auto;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    #helpBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #0077cc;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 10px 20px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      font-family: "Courier New", monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>GPIO Web Console</h1>
+
+  <div id="controls">
+    <textarea id="cmd" placeholder="Enter one or more commands, e.g.:
+pinMode 4 output
+write 4 1
+write 17 0"></textarea>
+    <button onclick="sendCommand()">Run</button>
+    <button onclick="togglePin(17)">Toggle Pin 17</button>
+    <button onclick="sendCommandText('reset')">Reset</button>
+    <button onclick="sendCommandText('read')">Read</button>
+  </div>
+
+  <div id="history"></div>
+
+  <h2 style="text-align:center;">GPIO Status</h2>
+  <table id="gpio-table">
+    <thead>
+      <tr><th>Pin</th><th>Value</th><th>Mode</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Modal -->
+  <div id="helpModal">
+    <div id="helpModalContent">
+      <h2>🧪 GPIO Emulator Overview</h2>
+      <p>This interface simulates Raspberry Pi GPIO commands using QEMU and SSH tunneling.</p>
+      <ul>
+        <li>Supports multiple commands like <code>write</code>, <code>pinMode</code>, <code>read</code>, and <code>reset</code></li>
+        <li>Auto-updates GPIO state in real time via WebSocket</li>
+        <li>Includes simulated sensor input on pin 22</li>
+        <li>Use “Toggle Pin 17” to quickly flip that pin</li>
+      </ul>
+      <button onclick="closeModal()">Close</button>
+    </div>
+  </div>
+
+  <!-- Help Button -->
+  <button id="helpBtn" onclick="openModal()">Help</button>
+
+  <script>
+    const ws = new WebSocket("ws://localhost:3001");
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "status") updateTable(msg.data);
+    };
+
+    function appendHistory(text) {
+      const log = document.getElementById("history");
+      log.innerHTML += `<div>&gt; ${text}</div>`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function sendCommand() {
+      const input = document.getElementById("cmd").value.trim();
+      if (!input) return;
+
+      const commands = input.split("\n").map(c => c.trim()).filter(Boolean);
+      commands.forEach(c => appendHistory(c));
+
+      await fetch("http://localhost:3000/gpio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + btoa("admin:secret")
+        },
+        body: JSON.stringify({ commands })
+      });
+
+      document.getElementById("cmd").value = "";
+    }
+
+    async function sendCommandText(cmd) {
+      appendHistory(cmd);
+      await fetch("http://localhost:3000/gpio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + btoa("admin:secret")
+        },
+        body: JSON.stringify({ command: cmd })
+      });
+    }
+
+    async function togglePin(pin) {
+      const res = await fetch("http://localhost:3000/gpio-status", {
+        headers: { "Authorization": "Basic " + btoa("admin:secret") }
+      });
+      const state = await res.json();
+      const current = state[pin]?.value ?? 0;
+      const newVal = current ? 0 : 1;
+      const cmd = `write ${pin} ${newVal}`;
+      appendHistory(cmd);
+
+      await fetch("http://localhost:3000/gpio", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + btoa("admin:secret")
+        },
+        body: JSON.stringify({ command: cmd })
+      });
+    }
+
+    function updateTable(data) {
+      const tbody = document.querySelector("#gpio-table tbody");
+      tbody.innerHTML = "";
+      Object.entries(data).forEach(([pin, info]) => {
+        const value = info.value ?? "?";
+        const mode = info.mode ?? "?";
+        const rowClass = value === 1 ? "on" : value === 0 ? "off" : "";
+        const row = `<tr class="${rowClass}"><td>${pin}</td><td>${value}</td><td>${mode}</td></tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    function openModal() {
+      document.getElementById("helpModal").style.display = "block";
+    }
+
+    function closeModal() {
+      document.getElementById("helpModal").style.display = "none";
+    }
+
+    // Optional: show modal briefly on page load
+    window.onload = () => {
+      setTimeout(openModal, 400);
+    };
+  </script>
+</body>
+</html>
+
